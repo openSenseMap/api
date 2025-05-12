@@ -1,6 +1,8 @@
 'use strict';
 
+const { asc } = require('drizzle-orm');
 const { db } = require('../drizzle');
+const { locationTable, deviceToLocationTable, deviceRelations } = require('../../schema/schema');
 
 const { mongoose } = require('../db'),
   timestamp = require('mongoose-timestamp'),
@@ -1001,7 +1003,7 @@ boxSchema.methods.getLocations = function getLocations ({ format, fromDate, toDa
     );
   });
 
-  if (format === 'geojson') {
+  if (format.toLowerCase() === 'geojson') {
     const geo = {
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [] },
@@ -1171,8 +1173,50 @@ const findDeviceById = async function findDeviceById (deviceId, { populate = tru
   return device;
 };
 
+const locationsForDevice = async (device, { format, fromDate, toDate }) => {
+  const end = toDate ? toDate : new Date().toISOString();
+  const end48hrsBack = new Date(new Date(end).getTime() - (48 * 60 * 60 * 1000)); // TODO fix UTC issue
+  const start = fromDate ? fromDate : end48hrsBack.toISOString();
+
+  try {
+    const locationsOfDevice = await db.query.deviceTable.findFirst({
+      where: (rel, { eq }) => eq(rel.id, device.id),
+      with: {
+        locations: {
+          where: (rel, { between }) => between(rel.time, start, end),
+          orderBy: asc(deviceToLocationTable.time),
+          // pfft: https://github.com/drizzle-team/drizzle-orm/pull/2778
+          // cannot include the location column due to this bug... -_-
+          // Using the workaround below instead
+          // with: {
+          //   geometry: true
+          // }
+        }
+      }
+    });
+
+    const locationIds = locationsOfDevice.locations.map(l => l.locationId);
+    const workaroundLocations = await db.query.locationTable.findMany({
+      where: (table, { inArray }) => inArray(table.id, locationIds)
+    });
+
+    if (format.toLowerCase() === 'geojson') {
+      return workaroundLocations.map(entry => {
+        return { coordinates: [entry.location.x, entry.location.y], type: 'Point', timestamp: '' };
+      });
+    }
+
+    return workaroundLocations.map(entry => {
+      return { coordinates: [entry.location.x, entry.location.y], type: 'Point', timestamp: locationsOfDevice.locations.find(l => l.locationId === entry.id).time };
+    });
+  } catch (e) {
+    return "err: " + e.message;
+  }
+};
+
 module.exports = {
   schema: boxSchema,
   model: boxModel,
-  findDeviceById
+  findDeviceById,
+  locationsForDevice
 };

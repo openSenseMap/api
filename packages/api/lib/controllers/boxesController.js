@@ -70,7 +70,7 @@ const
   } = require('../helpers/userParamHelpers'),
   handleError = require('../helpers/errorHandler'),
   jsonstringify = require('stringify-stream');
-const { findDeviceById } = require('@sensebox/opensensemap-api-models/src/box/box');
+const { findDeviceById, locationsForDevice } = require('@sensebox/opensensemap-api-models/src/box/box');
 const { createDevice, findDevices, findTags, updateDevice, findById, generateSketch } = require('@sensebox/opensensemap-api-models/src/device');
 const { findByUserId } = require('@sensebox/opensensemap-api-models/src/password');
 const { getSensorsWithLastMeasurement } = require('@sensebox/opensensemap-api-models/src/sensor');
@@ -195,8 +195,8 @@ const updateBox = async function updateBox (req, res) {
  */
 const getBoxLocations = async function getBoxLocations (req, res) {
   try {
-    const box = await Box.findBoxById(req._userParams.boxId, { onlyLocations: true, lean: false });
-    res.send(await box.getLocations(req._userParams));
+    const device = await findDeviceById(req._userParams.boxId);
+    res.send(await locationsForDevice(device, req._userParams));
   } catch (err) {
     return handleError(err);
   }
