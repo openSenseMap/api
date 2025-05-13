@@ -1175,43 +1175,42 @@ const findDeviceById = async function findDeviceById (deviceId, { populate = tru
 
 const locationsForDevice = async (device, { format, fromDate, toDate }) => {
   const end = toDate ? toDate : new Date().toISOString();
-  const end48hrsBack = new Date(new Date(end).getTime() - (48 * 60 * 60 * 1000)); // TODO fix UTC issue
+  const end48hrsBack = new Date(new Date(end).getTime() - (48 * 60 * 60 * 1000));
   const start = fromDate ? fromDate : end48hrsBack.toISOString();
 
-  try {
-    const locationsOfDevice = await db.query.deviceTable.findFirst({
-      where: (rel, { eq }) => eq(rel.id, device.id),
-      with: {
-        locations: {
-          where: (rel, { between }) => between(rel.time, start, end),
-          orderBy: asc(deviceToLocationTable.time),
-          // pfft: https://github.com/drizzle-team/drizzle-orm/pull/2778
-          // cannot include the location column due to this bug... -_-
-          // Using the workaround below instead
-          // with: {
-          //   geometry: true
-          // }
-        }
+  const locationsOfDevice = await db.query.deviceTable.findFirst({
+    where: (rel, { eq }) => eq(rel.id, device.id),
+    with: {
+      locations: {
+        where: (rel, { between }) => between(rel.time, start, end),
+        orderBy: asc(deviceToLocationTable.time),
+        // pfft: https://github.com/drizzle-team/drizzle-orm/pull/2778
+        // cannot include the location column due to this bug... -_-
+        // Using the workaround below instead
+        // with: {
+        //   geometry: true
+        // }
       }
-    });
-
-    const locationIds = locationsOfDevice.locations.map(l => l.locationId);
-    const workaroundLocations = await db.query.locationTable.findMany({
-      where: (table, { inArray }) => inArray(table.id, locationIds)
-    });
-
-    if (format.toLowerCase() === 'geojson') {
-      return workaroundLocations.map(entry => {
-        return { coordinates: [entry.location.x, entry.location.y], type: 'Point', timestamp: '' };
-      });
     }
+  });
 
-    return workaroundLocations.map(entry => {
-      return { coordinates: [entry.location.x, entry.location.y], type: 'Point', timestamp: locationsOfDevice.locations.find(l => l.locationId === entry.id).time };
-    });
-  } catch (e) {
-    return "err: " + e.message;
+  const locationIds = locationsOfDevice.locations.map(l => l.locationId);
+  const workaroundLocations = await db.query.locationTable.findMany({
+    where: (table, { inArray }) => inArray(table.id, locationIds)
+  });
+
+  if (format.toLowerCase() === 'geojson') {
+    return { type: 'Feature', geometry: {
+      type: 'LineString',
+      coordinates: [...workaroundLocations.map(l => [l.location.x, l.location.y])]
+    }, properties: {
+      timestamps: [...locationsOfDevice.locations.map(l => l.time)]
+    } };
   }
+
+  return workaroundLocations.map(entry => {
+    return { coordinates: [entry.location.x, entry.location.y], type: 'Point', timestamp: locationsOfDevice.locations.find(l => l.locationId === entry.id).time };
+  });
 };
 
 module.exports = {
