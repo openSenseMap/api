@@ -24,7 +24,7 @@
     "@turf/square-grid": "^6.5.0",
     "@turf/triangle-grid": "^6.5.0",
     "apicache": "^1.6.2",
-    "config": "^3.3.6",
+    "config": "^4.0.0",
     "csv-stringify": "^6.5.1",
     "dashify": "^2.0.0",
     "got": "^11.8.2",
