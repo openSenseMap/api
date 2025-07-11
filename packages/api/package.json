@@ -44,6 +44,6 @@
   },
   "private": true,
   "devDependencies": {
-    "csv-parse": "^4.15.4"
+    "csv-parse": "^6.0.0"
   }
 }
